@@ -55,12 +55,47 @@ model User {
   // Pile of Fame models
   confessions     Confession[]
   ritualSessions  RitualSession[]
+  minis           Mini[]
   events          Event[]
   reactions       Reaction[]
 
   cultId        String?
   cult          Cult?        @relation("CultMembers", fields: [cultId], references: [id])
   foundedCult   Cult?        @relation("CultFounder")
+}
+
+model Mini {
+  id              String     @id @default(cuid())
+  userId          String
+  name            String
+  system          String?
+  status          MiniStatus @default(SHAME)
+  stage           MiniStage  @default(UNSTARTED)
+  progressPercent Int        @default(0)
+  coverImageUrl   String?
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([userId, status])
+  @@index([userId, stage])
+}
+
+enum MiniStatus {
+  SHAME
+  WIP
+  FAME
+}
+
+enum MiniStage {
+  UNSTARTED
+  BASECOAT
+  WASH
+  HIGHLIGHT
+  DETAILS
+  FINISHED
 }
 
 // Verification tokens for email verification

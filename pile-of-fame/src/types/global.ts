@@ -1,6 +1,6 @@
-import { User, Confession, RitualSession, Event, Reaction } from '@prisma/client'
+import { User, Mini, Confession, RitualSession, Event, Reaction, MiniStatus, MiniStage } from '@prisma/client'
 
-export type { User, Confession, RitualSession, Event, Reaction }
+export type { User, Mini, Confession, RitualSession, Event, Reaction, MiniStatus, MiniStage }
 
 export type ActivityType = 'PRIME' | 'BASE' | 'HIGHLIGHT' | 'WASH' | 'DETAIL' | 'FINISH' | 'BASE_EARTH' | 'BASE_METAL' | 'BASE_SKIN' | 'BASE_CLOTH' | 'BASE_HAIR'
 
