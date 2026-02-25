@@ -28,6 +28,32 @@ export async function POST(req: Request) {
       status,
     } = await req.json()
 
+    const parsedProgressPercent =
+      progressPercent === undefined || progressPercent === null || progressPercent === ''
+        ? undefined
+        : Number(progressPercent)
+
+    if (
+      parsedProgressPercent !== undefined &&
+      (!Number.isFinite(parsedProgressPercent) || parsedProgressPercent < 0 || parsedProgressPercent > 100)
+    ) {
+      return NextResponse.json(
+        { error: 'progressPercent must be a number between 0 and 100' },
+        { status: 400 }
+      )
+    }
+
+    const normalizedPhotos = Array.isArray(photos)
+      ? photos.map((photo: unknown) => String(photo).trim()).filter(Boolean)
+      : []
+
+    const autoSetFame =
+      stage === 'FINISHED' ||
+      (parsedProgressPercent !== undefined && parsedProgressPercent >= 100)
+    const resolvedStatus = autoSetFame ? 'FAME' : status
+    const photoSuggestionTriggered =
+      normalizedPhotos.length > 0 && !stage && parsedProgressPercent === undefined && !status
+
     if (action === 'start') {
       const result = await prisma.$transaction(async (tx) => {
         const existingActive = await tx.ritualSession.findFirst({
@@ -81,7 +107,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
     }
 
-    if (!stage && progressPercent === undefined && !status) {
+    if (!stage && parsedProgressPercent === undefined && !status) {
       return NextResponse.json(
         { error: 'Update at least one: stage, progressPercent, or status' },
         { status: 400 }
@@ -113,11 +139,11 @@ export async function POST(req: Request) {
               afterImageUrl,
               targetMiniId: targetMiniId || activeSession.targetMiniId,
               notes: notes || null,
-              photos: Array.isArray(photos) ? photos : [],
+              photos: normalizedPhotos,
               delta: {
                 stage: stage || undefined,
-                progressPercent: progressPercent ?? undefined,
-                status: status || undefined,
+                progressPercent: parsedProgressPercent ?? undefined,
+                status: resolvedStatus || undefined,
               },
               endedAt: now,
             },
@@ -135,11 +161,11 @@ export async function POST(req: Request) {
               afterImageUrl,
               targetMiniId: targetMiniId || null,
               notes: notes || null,
-              photos: Array.isArray(photos) ? photos : [],
+              photos: normalizedPhotos,
               delta: {
                 stage: stage || undefined,
-                progressPercent: progressPercent ?? undefined,
-                status: status || undefined,
+                progressPercent: parsedProgressPercent ?? undefined,
+                status: resolvedStatus || undefined,
               },
             },
           })
@@ -156,8 +182,8 @@ export async function POST(req: Request) {
             where: { id: mini.id },
             data: {
               ...(stage ? { stage } : {}),
-              ...(progressPercent !== undefined ? { progressPercent } : {}),
-              ...(status ? { status } : {}),
+              ...(parsedProgressPercent !== undefined ? { progressPercent: parsedProgressPercent } : {}),
+              ...(resolvedStatus ? { status: resolvedStatus } : {}),
               updatedAt: now,
             },
           })
@@ -183,8 +209,12 @@ export async function POST(req: Request) {
           notes: ritualSession.notes,
           photosCount: ritualSession.photos.length,
           stage: stage || null,
-          progressPercent: progressPercent ?? null,
-          status: status || null,
+          progressPercent: parsedProgressPercent ?? null,
+          status: resolvedStatus || null,
+          heuristics: {
+            autoSetFame,
+            photoSuggestionTriggered,
+          },
           legacyType: 'RITUAL',
         },
       })

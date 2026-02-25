@@ -24,6 +24,13 @@ export default function RitualPage() {
   const [loading, setLoading] = useState(false)
   const intervalRef = useRef<NodeJS.Timeout | null>(null)
 
+  const parsedProgress = progressPercent === '' ? undefined : Number(progressPercent)
+  const hasPhotos = photoUrls
+    .split('\n')
+    .map((url) => url.trim())
+    .filter(Boolean).length > 0
+  const shouldSuggestProgressBump = hasPhotos && !stage && parsedProgress === undefined
+
   useEffect(() => {
     if (status === 'unauthenticated') {
       router.push('/login')
@@ -134,6 +141,15 @@ export default function RitualPage() {
     setIsRunning(false)
   }
 
+  useEffect(() => {
+    const shouldAutoSetFame =
+      stage === 'FINISHED' || (parsedProgress !== undefined && Number.isFinite(parsedProgress) && parsedProgress >= 100)
+
+    if (shouldAutoSetFame && miniStatus !== 'FAME') {
+      setMiniStatus('FAME')
+    }
+  }, [stage, parsedProgress, miniStatus])
+
   const handleSubmit = async () => {
     if (seconds < 60) {
       alert('Session must be at least 1 minute')
@@ -164,7 +180,7 @@ export default function RitualPage() {
             .map((url) => url.trim())
             .filter(Boolean),
           stage: stage || undefined,
-          progressPercent: progressPercent === '' ? undefined : Number(progressPercent),
+          progressPercent: parsedProgress,
           status: miniStatus || undefined,
         }),
       })
@@ -280,6 +296,11 @@ export default function RitualPage() {
                 className="w-full px-3 py-2 border rounded-md bg-background min-h-[72px]"
                 placeholder="https://..."
               />
+              {shouldSuggestProgressBump && (
+                <p className="mt-2 text-xs text-muted-foreground">
+                  Nice photo update — consider adding a stage or progress bump to capture the improvement.
+                </p>
+              )}
             </div>
 
             <div>
@@ -324,6 +345,11 @@ export default function RitualPage() {
                 <option value="WIP">WIP</option>
                 <option value="FAME">FAME</option>
               </select>
+              {(stage === 'FINISHED' || (parsedProgress !== undefined && parsedProgress >= 100)) && (
+                <p className="mt-2 text-xs text-muted-foreground">
+                  Status auto-set to FAME because this mini reached completion.
+                </p>
+              )}
             </div>
 
             <div>
