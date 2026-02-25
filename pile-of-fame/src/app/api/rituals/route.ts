@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/db'
+import { writeEvent } from '@/lib/events/write-event'
 
 export async function POST(req: Request) {
   try {
@@ -31,19 +32,22 @@ export async function POST(req: Request) {
         },
       })
 
-      // Create event
-      const event = await tx.event.create({
-        data: {
-          type: 'RITUAL',
-          userId: session.user.id,
-          ritualSessionId: ritualSession.id,
-          metadata: {
-            canonicalType: 'SESSION_ENDED',
-            activityType,
-            durationSeconds,
-            miniCount,
-            legacyType: 'RITUAL',
-          },
+      // Create event (contract-enforced through centralized writer)
+      const event = await writeEvent(tx, {
+        type: 'RITUAL',
+        actorUserId: session.user.id,
+        ritualSessionId: ritualSession.id,
+        entityRef: {
+          entityType: 'RITUAL_SESSION',
+          entityId: ritualSession.id,
+        },
+        eventVersion: 1,
+        metadata: {
+          canonicalType: 'SESSION_ENDED',
+          activityType,
+          durationSeconds,
+          miniCount,
+          legacyType: 'RITUAL',
         },
       })
 
