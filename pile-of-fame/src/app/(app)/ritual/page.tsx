@@ -13,6 +13,13 @@ export default function RitualPage() {
   const [isRunning, setIsRunning] = useState(false)
   const [seconds, setSeconds] = useState(0)
   const [miniCount, setMiniCount] = useState(1)
+  const [minis, setMinis] = useState<Array<{ id: string; name: string; stage: string; progressPercent: number; status: string }>>([])
+  const [targetMiniId, setTargetMiniId] = useState<string>('')
+  const [notes, setNotes] = useState('')
+  const [photoUrls, setPhotoUrls] = useState('')
+  const [stage, setStage] = useState('')
+  const [progressPercent, setProgressPercent] = useState('')
+  const [miniStatus, setMiniStatus] = useState('')
   const [activityType, setActivityType] = useState('BASE')
   const [loading, setLoading] = useState(false)
   const intervalRef = useRef<NodeJS.Timeout | null>(null)
@@ -45,6 +52,23 @@ export default function RitualPage() {
     }
 
     fetchActive()
+  }, [status])
+
+  useEffect(() => {
+    if (status !== 'authenticated') return
+
+    const fetchMinis = async () => {
+      try {
+        const res = await fetch('/api/minis')
+        if (!res.ok) return
+        const data = await res.json()
+        setMinis(data)
+      } catch {
+        // no-op
+      }
+    }
+
+    fetchMinis()
   }, [status])
 
   useEffect(() => {
@@ -90,6 +114,9 @@ export default function RitualPage() {
       const data = await res.json()
       setActiveSessionId(data?.ritualSession?.id ?? null)
       setIsRunning(true)
+      if (data?.ritualSession?.targetMiniId) {
+        setTargetMiniId(data.ritualSession.targetMiniId)
+      }
 
       if (!data?.event) {
         const startedAt = new Date(data.ritualSession.startedAt).getTime()
@@ -113,6 +140,11 @@ export default function RitualPage() {
       return
     }
 
+    if (!stage && progressPercent === '' && !miniStatus) {
+      alert('Update at least one: stage, progress, or status')
+      return
+    }
+
     setLoading(true)
 
     try {
@@ -122,9 +154,18 @@ export default function RitualPage() {
         body: JSON.stringify({
           action: 'end',
           sessionId: activeSessionId,
+          targetMiniId: targetMiniId || null,
           miniCount,
           activityType,
           durationSeconds: seconds,
+          notes: notes || null,
+          photos: photoUrls
+            .split('\n')
+            .map((url) => url.trim())
+            .filter(Boolean),
+          stage: stage || undefined,
+          progressPercent: progressPercent === '' ? undefined : Number(progressPercent),
+          status: miniStatus || undefined,
         }),
       })
 
@@ -193,6 +234,22 @@ export default function RitualPage() {
             <h2 className="text-xl font-semibold text-center">Log Your Progress</h2>
             
             <div>
+              <label className="block text-sm font-medium mb-2">Target mini</label>
+              <select
+                value={targetMiniId}
+                onChange={(e) => setTargetMiniId(e.target.value)}
+                className="w-full px-3 py-2 border rounded-md bg-background"
+              >
+                <option value="">Free paint (no target)</option>
+                {minis.map((mini) => (
+                  <option key={mini.id} value={mini.id}>
+                    {mini.name} · {mini.progressPercent}%
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
               <label className="block text-sm font-medium mb-2">
                 Minis Progressed
               </label>
@@ -203,6 +260,70 @@ export default function RitualPage() {
                 onChange={(e) => setMiniCount(parseInt(e.target.value) || 1)}
                 className="w-full px-3 py-2 border rounded-md bg-background"
               />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium mb-2">Notes (optional)</label>
+              <textarea
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                className="w-full px-3 py-2 border rounded-md bg-background min-h-[72px]"
+                placeholder="What did you work on?"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium mb-2">Photo URLs (optional, one per line)</label>
+              <textarea
+                value={photoUrls}
+                onChange={(e) => setPhotoUrls(e.target.value)}
+                className="w-full px-3 py-2 border rounded-md bg-background min-h-[72px]"
+                placeholder="https://..."
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium mb-2">Stage update</label>
+              <select
+                value={stage}
+                onChange={(e) => setStage(e.target.value)}
+                className="w-full px-3 py-2 border rounded-md bg-background"
+              >
+                <option value="">No stage update</option>
+                <option value="UNSTARTED">UNSTARTED</option>
+                <option value="BASECOAT">BASECOAT</option>
+                <option value="WASH">WASH</option>
+                <option value="HIGHLIGHT">HIGHLIGHT</option>
+                <option value="DETAILS">DETAILS</option>
+                <option value="FINISHED">FINISHED</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium mb-2">Progress update (%)</label>
+              <input
+                type="number"
+                min="0"
+                max="100"
+                value={progressPercent}
+                onChange={(e) => setProgressPercent(e.target.value)}
+                className="w-full px-3 py-2 border rounded-md bg-background"
+                placeholder="No progress update"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium mb-2">Status update</label>
+              <select
+                value={miniStatus}
+                onChange={(e) => setMiniStatus(e.target.value)}
+                className="w-full px-3 py-2 border rounded-md bg-background"
+              >
+                <option value="">No status update</option>
+                <option value="SHAME">SHAME</option>
+                <option value="WIP">WIP</option>
+                <option value="FAME">FAME</option>
+              </select>
             </div>
 
             <div>
