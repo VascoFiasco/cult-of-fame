@@ -45,6 +45,19 @@ export interface UserWithStats extends User {
 
 // Session creation types
 export interface CreateRitualSessionInput {
+  targetMiniId?: string | null
+  startedAt?: Date | string
+  endedAt?: Date | string | null
+  durationMinutes?: number | null
+  notes?: string
+  photos?: string[]
+  delta?: {
+    stage?: string
+    progressPercent?: number
+    status?: string
+  }
+
+  // Legacy fields retained for transition compatibility
   miniCount: number
   activityType: ActivityType
   durationSeconds: number
