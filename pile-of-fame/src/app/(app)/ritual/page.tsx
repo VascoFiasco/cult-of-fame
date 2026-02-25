@@ -9,6 +9,7 @@ import { ACTIVITY_TYPES, VOCABULARY } from '@/lib/domain-config'
 export default function RitualPage() {
   const { data: session, status } = useSession()
   const router = useRouter()
+  const [activeSessionId, setActiveSessionId] = useState<string | null>(null)
   const [isRunning, setIsRunning] = useState(false)
   const [seconds, setSeconds] = useState(0)
   const [miniCount, setMiniCount] = useState(1)
@@ -21,6 +22,30 @@ export default function RitualPage() {
       router.push('/login')
     }
   }, [status, router])
+
+  useEffect(() => {
+    if (status !== 'authenticated') return
+
+    const fetchActive = async () => {
+      try {
+        const res = await fetch('/api/rituals?active=1')
+        if (!res.ok) return
+        const active = await res.json()
+        if (!active?.id) return
+
+        setActiveSessionId(active.id)
+        setIsRunning(true)
+
+        const startedAt = new Date(active.startedAt).getTime()
+        const elapsed = Math.max(0, Math.floor((Date.now() - startedAt) / 1000))
+        setSeconds(elapsed)
+      } catch {
+        // no-op
+      }
+    }
+
+    fetchActive()
+  }, [status])
 
   useEffect(() => {
     if (isRunning) {
@@ -49,9 +74,33 @@ export default function RitualPage() {
     return `${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`
   }, [])
 
-  const handleStart = () => {
-    setIsRunning(true)
-    setSeconds(0)
+  const handleStart = async () => {
+    try {
+      const res = await fetch('/api/rituals', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'start' }),
+      })
+
+      if (!res.ok) {
+        alert('Failed to start session')
+        return
+      }
+
+      const data = await res.json()
+      setActiveSessionId(data?.ritualSession?.id ?? null)
+      setIsRunning(true)
+
+      if (!data?.event) {
+        const startedAt = new Date(data.ritualSession.startedAt).getTime()
+        const elapsed = Math.max(0, Math.floor((Date.now() - startedAt) / 1000))
+        setSeconds(elapsed)
+      } else {
+        setSeconds(0)
+      }
+    } catch {
+      alert('Failed to start session')
+    }
   }
 
   const handleStop = () => {
@@ -71,6 +120,8 @@ export default function RitualPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          action: 'end',
+          sessionId: activeSessionId,
           miniCount,
           activityType,
           durationSeconds: seconds,
@@ -83,7 +134,8 @@ export default function RitualPage() {
         return
       }
 
-      router.push('/feed')
+      setActiveSessionId(null)
+      router.push('/')
       router.refresh()
     } catch {
       alert('Something went wrong')
@@ -126,7 +178,7 @@ export default function RitualPage() {
           
           {!isRunning ? (
             <Button onClick={handleStart} size="lg" className="px-8 min-h-[44px]">
-              {VOCABULARY.primaryAction}
+              {activeSessionId ? VOCABULARY.continueAction : VOCABULARY.primaryAction}
             </Button>
           ) : (
             <Button onClick={handleStop} variant="destructive" size="lg" className="px-8 min-h-[44px]">
