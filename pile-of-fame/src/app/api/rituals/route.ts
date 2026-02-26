@@ -14,12 +14,18 @@ export async function POST(req: Request) {
 
     const {
       action,
+      sessionId,
       targetMiniId,
       miniCount,
       activityType,
       durationSeconds,
       beforeImageUrl,
       afterImageUrl,
+      notes,
+      photos,
+      stage,
+      progressPercent,
+      status,
     } = await req.json()
 
     if (action === 'start') {
@@ -75,6 +81,13 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
     }
 
+    if (!stage && progressPercent === undefined && !status) {
+      return NextResponse.json(
+        { error: 'Update at least one: stage, progressPercent, or status' },
+        { status: 400 }
+      )
+    }
+
     // End active session (or create one if missing) and emit event in a transaction
     const result = await prisma.$transaction(async (tx) => {
       const activeSession = await tx.ritualSession.findFirst({
@@ -82,6 +95,7 @@ export async function POST(req: Request) {
           userId: session.user.id,
           endedAt: null,
           durationSeconds: 0,
+          ...(sessionId ? { id: sessionId } : {}),
         },
         orderBy: { startedAt: 'desc' },
       })
@@ -97,6 +111,14 @@ export async function POST(req: Request) {
               durationMinutes: Math.max(1, Math.floor(durationSeconds / 60)),
               beforeImageUrl,
               afterImageUrl,
+              targetMiniId: targetMiniId || activeSession.targetMiniId,
+              notes: notes || null,
+              photos: Array.isArray(photos) ? photos : [],
+              delta: {
+                stage: stage || undefined,
+                progressPercent: progressPercent ?? undefined,
+                status: status || undefined,
+              },
               endedAt: now,
             },
           })
@@ -111,8 +133,36 @@ export async function POST(req: Request) {
               durationSeconds,
               beforeImageUrl,
               afterImageUrl,
+              targetMiniId: targetMiniId || null,
+              notes: notes || null,
+              photos: Array.isArray(photos) ? photos : [],
+              delta: {
+                stage: stage || undefined,
+                progressPercent: progressPercent ?? undefined,
+                status: status || undefined,
+              },
             },
           })
+
+      const resolvedTargetMiniId = ritualSession.targetMiniId || targetMiniId || null
+
+      if (resolvedTargetMiniId) {
+        const mini = await tx.mini.findFirst({
+          where: { id: resolvedTargetMiniId, userId: session.user.id },
+        })
+
+        if (mini) {
+          await tx.mini.update({
+            where: { id: mini.id },
+            data: {
+              ...(stage ? { stage } : {}),
+              ...(progressPercent !== undefined ? { progressPercent } : {}),
+              ...(status ? { status } : {}),
+              updatedAt: now,
+            },
+          })
+        }
+      }
 
       // Create event (contract-enforced through centralized writer)
       const event = await writeEvent(tx, {
@@ -129,6 +179,12 @@ export async function POST(req: Request) {
           activityType,
           durationSeconds,
           miniCount,
+          targetMiniId: resolvedTargetMiniId,
+          notes: ritualSession.notes,
+          photosCount: ritualSession.photos.length,
+          stage: stage || null,
+          progressPercent: progressPercent ?? null,
+          status: status || null,
           legacyType: 'RITUAL',
         },
       })
